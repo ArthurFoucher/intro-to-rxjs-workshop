@@ -1,57 +1,77 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, merge, Subject, timer } from 'rxjs';
+import { EMPTY, merge, Observable, Subject, timer } from 'rxjs';
 import { INITIAL_COUNTER_STATE } from '../initial-counter-state';
-import { mapTo } from 'rxjs/operators';
+import {
+  distinctUntilChanged,
+  map,
+  mapTo,
+  pluck,
+  scan,
+  startWith,
+  switchMap,
+  withLatestFrom,
+} from 'rxjs/operators';
+import { CounterState } from '../counter-state.interface';
+
+type CounterStateChange = Partial<CounterState>;
+type Command = Observable<CounterStateChange>;
 
 @Injectable({
   providedIn: 'root',
 })
 export class CounterFacadeService {
-  counterState$ = new BehaviorSubject(INITIAL_COUNTER_STATE);
-
   btnStart$ = new Subject();
   btnPause$ = new Subject();
   btnUp$ = new Subject();
   btnDown$ = new Subject();
   btnReset$ = new Subject();
 
-  start$ = this.btnStart$.pipe(mapTo(true));
-  pause$ = this.btnPause$.pipe(mapTo(false));
-  tick$ = timer(0, this.counterState$.value.tickSpeed);
+  start$: Command = this.btnStart$.pipe(mapTo({ isTicking: true }));
+  pause$: Command = this.btnPause$.pipe(mapTo({ isTicking: false }));
+  countUp$: Command = this.btnUp$.pipe(mapTo({ countUp: true }));
+  countDown$: Command = this.btnDown$.pipe(mapTo({ countUp: false }));
+  reset$: Command = this.btnReset$.pipe(mapTo(INITIAL_COUNTER_STATE));
+  command$ = new Subject<CounterStateChange>();
 
-  countUp$ = this.btnUp$.pipe(mapTo(true));
-  countDown$ = this.btnDown$.pipe(mapTo(false));
+  counterState$: Observable<CounterState> = merge(
+    this.start$,
+    this.pause$,
+    this.countUp$,
+    this.countDown$,
+    this.reset$,
+    this.command$,
+  ).pipe(
+    startWith(INITIAL_COUNTER_STATE),
+    scan<CounterStateChange, CounterState>((state, change) => ({
+      ...state,
+      ...change,
+    })),
+  );
 
-  countDirection$ = merge(this.countUp$, this.countDown$);
+  isTicking$ = this.counterState$.pipe(
+    pluck('isTicking'),
+    distinctUntilChanged(),
+  );
+
+  tickSpeed$ = this.counterState$.pipe(
+    pluck('tickSpeed'),
+    distinctUntilChanged(),
+  );
+
+  tick$ = this.isTicking$.pipe(
+    withLatestFrom(this.tickSpeed$),
+    switchMap(([isTicking, tickSpeed]) =>
+      isTicking ? timer(0, tickSpeed) : EMPTY,
+    ),
+    withLatestFrom(this.counterState$, (_, state) => state),
+    map(
+      ({ count, countDiff, countUp }) => count + (countUp ? 1 : -1) * countDiff,
+    ),
+  );
 
   constructor() {
-    this.tick$.subscribe(() => {
-      const state = this.counterState$.value;
-      const { count, countDiff, countUp, isTicking } = state;
-      this.counterState$.next({
-        ...state,
-        count: isTicking ? count + (countUp ? 1 : -1) * countDiff : count,
-      });
-    });
-
-    this.countDirection$.subscribe((countUp) => {
-      const state = this.counterState$.value;
-      this.counterState$.next({
-        ...state,
-        countUp,
-      });
-    });
-
-    this.btnReset$.subscribe(() => {
-      this.counterState$.next(INITIAL_COUNTER_STATE);
-    });
-
-    merge(this.start$, this.pause$).subscribe((isTicking) => {
-      const state = this.counterState$.value;
-      this.counterState$.next({
-        ...state,
-        isTicking,
-      });
+    this.tick$.subscribe((count) => {
+      this.command$.next({ count });
     });
   }
 }
