@@ -12,6 +12,7 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { CounterState } from '../counter-state.interface';
+import { selectDistinctState } from '../operators/selectDistinctState';
 
 type CounterStateChange = Partial<CounterState>;
 type Command = Observable<CounterStateChange>;
@@ -48,15 +49,8 @@ export class CounterFacadeService {
     })),
   );
 
-  isTicking$ = this.counterState$.pipe(
-    pluck('isTicking'),
-    distinctUntilChanged(),
-  );
-
-  tickSpeed$ = this.counterState$.pipe(
-    pluck('tickSpeed'),
-    distinctUntilChanged(),
-  );
+  isTicking$ = this.counterState$.pipe(selectDistinctState('isTicking'));
+  tickSpeed$ = this.counterState$.pipe(selectDistinctState('tickSpeed'));
 
   tick$ = this.isTicking$.pipe(
     withLatestFrom(this.tickSpeed$),
