@@ -11,6 +11,8 @@ export class CounterFacadeService {
 
   btnStart$ = new Subject();
   btnPause$ = new Subject();
+  btnUp$ = new Subject();
+  btnDown$ = new Subject();
 
   start$ = this.btnStart$.pipe(mapTo(true));
   pause$ = this.btnPause$.pipe(mapTo(false));
@@ -20,13 +22,26 @@ export class CounterFacadeService {
     ),
   );
 
+  countUp$ = this.btnUp$.pipe(mapTo(true));
+  countDown$ = this.btnDown$.pipe(mapTo(false));
+
+  countDirection$ = merge(this.countUp$, this.countDown$);
+
   constructor() {
     this.tick$.subscribe(() => {
       const state = this.counterState$.value;
-      const { count, countDiff } = state;
+      const { count, countDiff, countUp } = state;
       this.counterState$.next({
         ...state,
-        count: count + countDiff,
+        count: count + (countUp ? 1 : -1) * countDiff,
+      });
+    });
+
+    this.countDirection$.subscribe((countUp) => {
+      const state = this.counterState$.value;
+      this.counterState$.next({
+        ...state,
+        countUp,
       });
     });
   }

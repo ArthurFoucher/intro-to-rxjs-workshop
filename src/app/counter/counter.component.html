@@ -2,5 +2,7 @@
   [state]="facade.counterState$ | async"
   (btnStart)="facade.btnStart$.next()"
   (btnPause)="facade.btnPause$.next()"
+  (btnUp)="facade.btnUp$.next()"
+  (btnDown)="facade.btnDown$.next()"
 >
 </app-counter-view>
