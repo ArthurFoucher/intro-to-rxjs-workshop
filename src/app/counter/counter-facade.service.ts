@@ -1,11 +1,9 @@
 import { Injectable } from '@angular/core';
-import { EMPTY, merge, Observable, Subject, timer } from 'rxjs';
+import { combineLatest, EMPTY, merge, Observable, Subject, timer } from 'rxjs';
 import { INITIAL_COUNTER_STATE } from '../initial-counter-state';
 import {
-  distinctUntilChanged,
   map,
   mapTo,
-  pluck,
   scan,
   startWith,
   switchMap,
@@ -13,6 +11,7 @@ import {
 } from 'rxjs/operators';
 import { CounterState } from '../counter-state.interface';
 import { selectDistinctState } from '../operators/selectDistinctState';
+import { inputToValue } from '../operators/inputToValue';
 
 type CounterStateChange = Partial<CounterState>;
 type Command = Observable<CounterStateChange>;
@@ -26,12 +25,30 @@ export class CounterFacadeService {
   btnUp$ = new Subject();
   btnDown$ = new Subject();
   btnReset$ = new Subject();
+  btnSetTo$ = new Subject();
+  inputSetTo$ = new Subject();
+  inputTickSpeed$ = new Subject();
+  inputCountDiff$ = new Subject();
 
   start$: Command = this.btnStart$.pipe(mapTo({ isTicking: true }));
   pause$: Command = this.btnPause$.pipe(mapTo({ isTicking: false }));
   countUp$: Command = this.btnUp$.pipe(mapTo({ countUp: true }));
   countDown$: Command = this.btnDown$.pipe(mapTo({ countUp: false }));
   reset$: Command = this.btnReset$.pipe(mapTo(INITIAL_COUNTER_STATE));
+  setTo$: Command = this.btnSetTo$.pipe(
+    withLatestFrom(this.inputSetTo$, (_, value) => value),
+    inputToValue(INITIAL_COUNTER_STATE.count),
+    map((count) => ({ count })),
+  );
+  tickSpeed$: Command = this.inputTickSpeed$.pipe(
+    inputToValue(INITIAL_COUNTER_STATE.tickSpeed),
+    map((tickSpeed) => ({ tickSpeed })),
+  );
+  countDiff$: Command = this.inputCountDiff$.pipe(
+    inputToValue(INITIAL_COUNTER_STATE.countDiff),
+    map((countDiff) => ({ countDiff })),
+  );
+
   command$ = new Subject<CounterStateChange>();
 
   counterState$: Observable<CounterState> = merge(
@@ -40,6 +57,9 @@ export class CounterFacadeService {
     this.countUp$,
     this.countDown$,
     this.reset$,
+    this.setTo$,
+    this.tickSpeed$,
+    this.countDiff$,
     this.command$,
   ).pipe(
     startWith(INITIAL_COUNTER_STATE),
@@ -50,10 +70,9 @@ export class CounterFacadeService {
   );
 
   isTicking$ = this.counterState$.pipe(selectDistinctState('isTicking'));
-  tickSpeed$ = this.counterState$.pipe(selectDistinctState('tickSpeed'));
+  tickSpeedState$ = this.counterState$.pipe(selectDistinctState('tickSpeed'));
 
-  tick$ = this.isTicking$.pipe(
-    withLatestFrom(this.tickSpeed$),
+  tick$ = combineLatest([this.isTicking$, this.tickSpeedState$]).pipe(
     switchMap(([isTicking, tickSpeed]) =>
       isTicking ? timer(0, tickSpeed) : EMPTY,
     ),
